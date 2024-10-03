@@ -79,7 +79,13 @@ mod ffi {
         type SwervePathBuilder;
 
         fn set_drivetrain(self: Pin<&mut SwervePathBuilder>, drivetrain: &SwerveDrivetrain);
-        fn set_bumpers(self: Pin<&mut SwervePathBuilder>, length: f64, width: f64);
+        fn set_bumpers(
+            self: Pin<&mut SwervePathBuilder>,
+            front: f64,
+            left: f64,
+            right: f64,
+            back: f64,
+        );
         fn set_control_interval_counts(self: Pin<&mut SwervePathBuilder>, counts: Vec<usize>);
 
         fn pose_wpt(self: Pin<&mut SwervePathBuilder>, index: usize, x: f64, y: f64, heading: f64);
@@ -145,6 +151,13 @@ mod ffi {
             field_points_x: Vec<f64>,
             field_points_y: Vec<f64>,
         );
+        fn wpt_keep_out_circle(
+            self: Pin<&mut SwervePathBuilder>,
+            index: usize,
+            field_point_x: f64,
+            field_point_y: f64,
+            keep_in_radius: f64,
+        );
 
         fn sgmt_linear_velocity_direction(
             self: Pin<&mut SwervePathBuilder>,
@@ -195,21 +208,12 @@ mod ffi {
             field_points_y: Vec<f64>,
         );
 
-        fn sgmt_circle_obstacle(
+        fn sgmt_keep_out_circle(
             self: Pin<&mut SwervePathBuilder>,
             from_index: usize,
             to_index: usize,
             x: f64,
             y: f64,
-            radius: f64,
-        );
-
-        fn sgmt_polygon_obstacle(
-            self: Pin<&mut SwervePathBuilder>,
-            from_index: usize,
-            to_index: usize,
-            x: Vec<f64>,
-            y: Vec<f64>,
             radius: f64,
         );
 
@@ -232,7 +236,13 @@ mod ffi {
             self: Pin<&mut DifferentialPathBuilder>,
             drivetrain: &DifferentialDrivetrain,
         );
-        fn set_bumpers(self: Pin<&mut DifferentialPathBuilder>, length: f64, width: f64);
+        fn set_bumpers(
+            self: Pin<&mut DifferentialPathBuilder>,
+            front: f64,
+            left: f64,
+            right: f64,
+            back: f64,
+        );
         fn set_control_interval_counts(self: Pin<&mut DifferentialPathBuilder>, counts: Vec<usize>);
 
         fn pose_wpt(
@@ -304,6 +314,13 @@ mod ffi {
             field_points_x: Vec<f64>,
             field_points_y: Vec<f64>,
         );
+        fn wpt_keep_out_circle(
+            self: Pin<&mut DifferentialPathBuilder>,
+            index: usize,
+            field_point_x: f64,
+            field_point_y: f64,
+            keep_in_radius: f64,
+        );
 
         fn sgmt_linear_velocity_direction(
             self: Pin<&mut DifferentialPathBuilder>,
@@ -345,21 +362,12 @@ mod ffi {
             field_points_y: Vec<f64>,
         );
 
-        fn sgmt_circle_obstacle(
+        fn sgmt_keep_out_circle(
             self: Pin<&mut DifferentialPathBuilder>,
             from_index: usize,
             to_index: usize,
             x: f64,
             y: f64,
-            radius: f64,
-        );
-
-        fn sgmt_polygon_obstacle(
-            self: Pin<&mut DifferentialPathBuilder>,
-            from_index: usize,
-            to_index: usize,
-            x: Vec<f64>,
-            y: Vec<f64>,
             radius: f64,
         );
 
@@ -381,7 +389,7 @@ mod ffi {
 }
 
 pub trait PathBuilder: Any {
-    fn set_bumpers(&mut self, length: f64, width: f64);
+    fn set_bumpers(&mut self, front: f64, left: f64, right: f64, back: f64);
     fn set_control_interval_counts(&mut self, counts: Vec<usize>);
 
     fn pose_wpt(&mut self, index: usize, x: f64, y: f64, heading: f64);
@@ -415,6 +423,13 @@ pub trait PathBuilder: Any {
         index: usize,
         field_points_x: Vec<f64>,
         field_points_y: Vec<f64>,
+    );
+    fn wpt_keep_out_circle(
+        &mut self,
+        index: usize,
+        field_point_x: f64,
+        field_point_y: f64,
+        keep_in_radius: f64,
     );
 
     fn sgmt_linear_velocity_direction(&mut self, from_index: usize, to_index: usize, angle: f64);
@@ -452,21 +467,12 @@ pub trait PathBuilder: Any {
         field_points_y: Vec<f64>,
     );
 
-    fn sgmt_circle_obstacle(
+    fn sgmt_keep_out_circle(
         &mut self,
         from_index: usize,
         to_index: usize,
         x: f64,
         y: f64,
-        radius: f64,
-    );
-
-    fn sgmt_polygon_obstacle(
-        &mut self,
-        from_index: usize,
-        to_index: usize,
-        x: Vec<f64>,
-        y: Vec<f64>,
         radius: f64,
     );
 }
@@ -521,7 +527,7 @@ impl SwervePathBuilder {
         handle: i64,
     ) -> Result<SwerveTrajectory, TrajoptError> {
         match self.path_builder.generate(diagnostics, handle) {
-            Ok(traj) => Ok(traj),
+            Ok(trajectory) => Ok(trajectory),
             Err(msg) => {
                 let what = msg.what();
                 Err(TrajoptError::from(
@@ -545,8 +551,14 @@ impl SwervePathBuilder {
     }
 }
 impl PathBuilder for SwervePathBuilder {
-    fn set_bumpers(&mut self, length: f64, width: f64) {
-        crate::ffi::SwervePathBuilder::set_bumpers(self.path_builder.pin_mut(), length, width);
+    fn set_bumpers(&mut self, front: f64, left: f64, right: f64, back: f64) {
+        crate::ffi::SwervePathBuilder::set_bumpers(
+            self.path_builder.pin_mut(),
+            front,
+            left,
+            right,
+            back,
+        );
     }
 
     fn set_control_interval_counts(&mut self, counts: Vec<usize>) {
@@ -672,6 +684,22 @@ impl PathBuilder for SwervePathBuilder {
         );
     }
 
+    fn wpt_keep_out_circle(
+        &mut self,
+        index: usize,
+        field_point_x: f64,
+        field_point_y: f64,
+        keep_in_radius: f64,
+    ) {
+        crate::ffi::SwervePathBuilder::wpt_keep_out_circle(
+            self.path_builder.pin_mut(),
+            index,
+            field_point_x,
+            field_point_y,
+            keep_in_radius,
+        )
+    }
+
     fn sgmt_linear_velocity_direction(&mut self, from_index: usize, to_index: usize, angle: f64) {
         crate::ffi::SwervePathBuilder::sgmt_linear_velocity_direction(
             self.path_builder.pin_mut(),
@@ -757,7 +785,7 @@ impl PathBuilder for SwervePathBuilder {
         );
     }
 
-    fn sgmt_circle_obstacle(
+    fn sgmt_keep_out_circle(
         &mut self,
         from_index: usize,
         to_index: usize,
@@ -765,25 +793,7 @@ impl PathBuilder for SwervePathBuilder {
         y: f64,
         radius: f64,
     ) {
-        crate::ffi::SwervePathBuilder::sgmt_circle_obstacle(
-            self.path_builder.pin_mut(),
-            from_index,
-            to_index,
-            x,
-            y,
-            radius,
-        );
-    }
-
-    fn sgmt_polygon_obstacle(
-        &mut self,
-        from_index: usize,
-        to_index: usize,
-        x: Vec<f64>,
-        y: Vec<f64>,
-        radius: f64,
-    ) {
-        crate::ffi::SwervePathBuilder::sgmt_polygon_obstacle(
+        crate::ffi::SwervePathBuilder::sgmt_keep_out_circle(
             self.path_builder.pin_mut(),
             from_index,
             to_index,
@@ -836,7 +846,7 @@ impl DifferentialPathBuilder {
         handle: i64,
     ) -> Result<DifferentialTrajectory, TrajoptError> {
         match self.path_builder.generate(diagnostics, handle) {
-            Ok(traj) => Ok(traj),
+            Ok(trajectory) => Ok(trajectory),
             Err(msg) => {
                 let what = msg.what();
                 Err(TrajoptError::from(
@@ -863,11 +873,13 @@ impl DifferentialPathBuilder {
     }
 }
 impl PathBuilder for DifferentialPathBuilder {
-    fn set_bumpers(&mut self, length: f64, width: f64) {
+    fn set_bumpers(&mut self, front: f64, left: f64, right: f64, back: f64) {
         crate::ffi::DifferentialPathBuilder::set_bumpers(
             self.path_builder.pin_mut(),
-            length,
-            width,
+            front,
+            left,
+            right,
+            back,
         );
     }
 
@@ -1000,6 +1012,22 @@ impl PathBuilder for DifferentialPathBuilder {
         );
     }
 
+    fn wpt_keep_out_circle(
+        &mut self,
+        index: usize,
+        field_point_x: f64,
+        field_point_y: f64,
+        keep_in_radius: f64,
+    ) {
+        crate::ffi::DifferentialPathBuilder::wpt_keep_out_circle(
+            self.path_builder.pin_mut(),
+            index,
+            field_point_x,
+            field_point_y,
+            keep_in_radius,
+        )
+    }
+
     fn sgmt_linear_velocity_direction(&mut self, from_index: usize, to_index: usize, angle: f64) {
         crate::ffi::DifferentialPathBuilder::sgmt_linear_velocity_direction(
             self.path_builder.pin_mut(),
@@ -1085,7 +1113,7 @@ impl PathBuilder for DifferentialPathBuilder {
         );
     }
 
-    fn sgmt_circle_obstacle(
+    fn sgmt_keep_out_circle(
         &mut self,
         from_index: usize,
         to_index: usize,
@@ -1093,25 +1121,7 @@ impl PathBuilder for DifferentialPathBuilder {
         y: f64,
         radius: f64,
     ) {
-        crate::ffi::DifferentialPathBuilder::sgmt_circle_obstacle(
-            self.path_builder.pin_mut(),
-            from_index,
-            to_index,
-            x,
-            y,
-            radius,
-        );
-    }
-
-    fn sgmt_polygon_obstacle(
-        &mut self,
-        from_index: usize,
-        to_index: usize,
-        x: Vec<f64>,
-        y: Vec<f64>,
-        radius: f64,
-    ) {
-        crate::ffi::DifferentialPathBuilder::sgmt_polygon_obstacle(
+        crate::ffi::DifferentialPathBuilder::sgmt_keep_out_circle(
             self.path_builder.pin_mut(),
             from_index,
             to_index,

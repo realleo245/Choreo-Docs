@@ -14,7 +14,7 @@ import { WaypointID } from "./ConstraintDefinitions";
 import { WaypointScope } from "./ConstraintStore";
 import { Env } from "./DocumentManager";
 import { ExpressionStore } from "./ExpressionStore";
-import { IChoreoTrajStore } from "./path/ChoreoTrajStore";
+import { IChoreoTrajectoryStore } from "./path/ChoreoTrajectoryStore";
 import { IHolonomicPathStore } from "./path/HolonomicPathStore";
 
 export type CommandType =
@@ -114,7 +114,7 @@ export const CommandStore = types
       const newCommand = getEnv<Env>(self).create.CommandStore({
         type: "named",
         data: {
-          waitTime: ["0 s", 0] as Expr,
+          waitTime: { exp: "0 s", val: 0 } as Expr,
           name: "",
           commands: []
         }
@@ -122,7 +122,7 @@ export const CommandStore = types
       self.commands.push(newCommand);
       return undefined;
     },
-    pushCommand(subcommand: ICommandStore) {
+    pushCommand(subcommand: IAnyType) {
       self.commands.push(subcommand);
     },
     detachCommand(index: number) {
@@ -141,7 +141,7 @@ export const EventMarkerStore = types
   .model("EventMarker", {
     name: types.string,
     target: types.maybe(WaypointScope),
-    trajTargetIndex: types.maybe(types.number),
+    trajectoryTargetIndex: types.maybe(types.number),
     offset: ExpressionStore,
     command: CommandStore,
     uuid: types.identifier
@@ -164,7 +164,7 @@ export const EventMarkerStore = types
     },
     getPath(): IHolonomicPathStore {
       const path: IHolonomicPathStore = getParent<IHolonomicPathStore>(
-        getParent<IChoreoTrajStore>(getParent<IEventMarkerStore[]>(self))
+        getParent<IChoreoTrajectoryStore>(getParent<IEventMarkerStore[]>(self))
       );
       return path;
     },
@@ -185,8 +185,10 @@ export const EventMarkerStore = types
   .views((self) => ({
     get targetTimestamp(): number | undefined {
       const path = self.getPath();
-      if (self.trajTargetIndex === undefined) return undefined;
-      return (path as IHolonomicPathStore).traj.waypoints[self.trajTargetIndex];
+      if (self.trajectoryTargetIndex === undefined) return undefined;
+      return (path as IHolonomicPathStore).trajectory.waypoints[
+        self.trajectoryTargetIndex
+      ];
     },
     get timestamp(): number | undefined {
       if (this.targetTimestamp === undefined) {
@@ -196,13 +198,13 @@ export const EventMarkerStore = types
     }
   }))
   .actions((self) => ({
-    setTrajTargetIndex(index: number | undefined) {
+    setTrajectoryTargetIndex(index: number | undefined) {
       if (index !== undefined) {
-        self.trajTargetIndex = index;
+        self.trajectoryTargetIndex = index;
       }
     },
     updateTargetIndex() {
-      this.setTrajTargetIndex(self.getTargetIndex());
+      this.setTrajectoryTargetIndex(self.getTargetIndex());
     },
     setTarget(target: WaypointID) {
       self.target = target;
@@ -228,15 +230,19 @@ export const EventMarkerStore = types
       } else if (self.offset.value == 0) {
         return true;
       } else {
-        const splitTimes = path.traj.samples.map((sect) => sect[0]?.t);
-        splitTimes.forEach((stopTimestamp) => {
-          if (
-            (targetTimestamp < stopTimestamp && timestamp > stopTimestamp) ||
-            (targetTimestamp > stopTimestamp && timestamp < stopTimestamp)
-          ) {
-            retVal = false;
+        const splitTimes = path.trajectory.splits.map(
+          (idx) => path.trajectory.samples[idx]?.t
+        );
+        [0, ...splitTimes, path.trajectory.getTotalTimeSeconds()].forEach(
+          (stopTimestamp) => {
+            if (
+              (targetTimestamp < stopTimestamp && timestamp > stopTimestamp) ||
+              (targetTimestamp > stopTimestamp && timestamp < stopTimestamp)
+            ) {
+              retVal = false;
+            }
           }
-        });
+        );
       }
       return retVal;
     }

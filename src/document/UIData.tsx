@@ -2,7 +2,6 @@ import {
   Circle,
   CircleOutlined,
   CropFree,
-  DoNotDisturb,
   Grid4x4,
   Room,
   Route,
@@ -11,8 +10,6 @@ import {
 } from "@mui/icons-material";
 import { ReactElement } from "react";
 import Waypoint from "../assets/Waypoint";
-import BetasConfigPanel from "../components/config/BetasConfigPanel";
-import ExportConfigPanel from "../components/config/ExportConfigPanel";
 import KeyboardShortcutsPanel from "../components/config/KeyboardShortcutsPanel";
 import RobotConfigPanel from "../components/config/robotconfig/RobotConfigPanel";
 import {
@@ -79,29 +76,6 @@ export const navbarIndexToConstraintKey: {
   });
 }
 const constraintNavbarCount = Object.keys(ConstraintDefinitions).length;
-export const ObstacleData: {
-  [key: string]: {
-    index: number;
-    name: string;
-    icon: ReactElement;
-  };
-} = {
-  CircleObstacle: {
-    index: Object.keys(NavbarData).length,
-    name: "Circular Obstacle",
-    icon: <DoNotDisturb />
-  }
-};
-let obstacleNavbarCount = 0;
-obstacleNavbarCount = Object.keys(ObstacleData).length;
-Object.entries(ObstacleData).forEach(([name, data]) => {
-  const obstaclesOffset = Object.keys(NavbarData).length;
-  NavbarData[name] = {
-    index: obstaclesOffset,
-    name: data.name,
-    icon: data.icon
-  };
-});
 
 const eventMarkerCount = 1;
 NavbarData.EventMarker = {
@@ -129,7 +103,6 @@ export const NavbarItemData = (() => {
 })();
 
 const NavbarItemSections = [waypointNavbarCount, constraintNavbarCount];
-NavbarItemSections.push(obstacleNavbarCount);
 NavbarItemSections.push(eventMarkerCount);
 
 export const NavbarItemSectionEnds = NavbarItemSections.map((_s, idx) =>
@@ -170,14 +143,8 @@ export const ViewData = {
     icon: <Waypoint />,
     default: true
   },
-  Obstacles: {
-    index: 5,
-    name: "Obstacles",
-    icon: <DoNotDisturb />,
-    default: true
-  },
   Focus: {
-    index: 6,
+    index: 5,
     name: "Focus",
     icon: <CropFree />,
     default: false
@@ -208,13 +175,8 @@ export const SETTINGS_TABS = [
     component: () => <RobotConfigPanel></RobotConfigPanel>
   },
   {
-    name: "Export Config",
-    component: () => <ExportConfigPanel></ExportConfigPanel>
-  },
-  {
     name: "Controls",
     component: () => <KeyboardShortcutsPanel></KeyboardShortcutsPanel>
-  },
-  { name: "Betas", component: () => <BetasConfigPanel></BetasConfigPanel> }
+  }
 ] as const;
 export const NUM_SETTINGS_TABS = SETTINGS_TABS.length;

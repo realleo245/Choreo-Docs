@@ -2,23 +2,23 @@ use std::f64::consts::PI;
 
 use crate::generation::angle_modulus;
 use crate::izip;
-use crate::spec::traj::ConstraintData::{MaxAngularVelocity, PointAt};
-use crate::spec::traj::{ConstraintIDX, ConstraintScope, TrajFile};
+use crate::spec::trajectory::ConstraintData::{MaxAngularVelocity, PointAt};
+use crate::spec::trajectory::{ConstraintIDX, ConstraintScope, TrajectoryFile};
 use crate::spec::Expr;
 use crate::{ChoreoError, ChoreoResult};
 
 // This should be used before sending to solver
-pub fn adjust_headings(traj: &mut TrajFile) -> ChoreoResult<()> {
-    let new_headings = calculate_adjusted_headings(traj)?;
+pub fn adjust_headings(trajectory: &mut TrajectoryFile) -> ChoreoResult<()> {
+    let new_headings = calculate_adjusted_headings(trajectory)?;
     // new_headings, set to file
     for (i, &h) in new_headings.iter().enumerate() {
-        traj.params.waypoints[i].heading = Expr::new(format!("{h} rad").as_str(), h);
+        trajectory.params.waypoints[i].heading = Expr::new(format!("{h} rad").as_str(), h);
     }
     Ok(())
 }
 
-pub fn calculate_adjusted_headings(traj: &TrajFile) -> ChoreoResult<Vec<f64>> {
-    let waypoints = &traj.params.waypoints;
+pub fn calculate_adjusted_headings(trajectory: &TrajectoryFile) -> ChoreoResult<Vec<f64>> {
+    let waypoints = &trajectory.params.waypoints;
 
     let num_wpts = waypoints.len();
     let mut new_headings = vec![0f64; num_wpts];
@@ -29,12 +29,12 @@ pub fn calculate_adjusted_headings(traj: &TrajFile) -> ChoreoResult<Vec<f64>> {
     let mut sgmt_has_0_ang_vel = vec![0u8; num_wpts];
     let mut headings_from_constraints = vec![None; num_wpts];
 
-    let (guess_point_idxs, constraints_idx) = fix_constraint_indices(traj);
+    let (guess_point_idxs, constraints_idx) = fix_constraint_indices(trajectory);
 
     // find pose waypoints
     for (w, maybe_h) in waypoints.iter().zip(headings_from_constraints.iter_mut()) {
         if w.fix_heading {
-            *maybe_h = Some(w.heading.1);
+            *maybe_h = Some(w.heading.val);
         }
     }
 
@@ -78,8 +78,8 @@ pub fn calculate_adjusted_headings(traj: &TrajFile) -> ChoreoResult<Vec<f64>> {
                         sgmt_has_point_at[wpt_idx] += 1;
                     }
 
-                    let new_x = x - waypoints[wpt_idx].x.1;
-                    let new_y = y - waypoints[wpt_idx].y.1;
+                    let new_x = x - waypoints[wpt_idx].x.val;
+                    let new_y = y - waypoints[wpt_idx].y.val;
                     let heading = new_y.atan2(new_x);
                     let heading = if flip {
                         angle_modulus(heading + PI)
@@ -184,7 +184,7 @@ pub fn calculate_adjusted_headings(traj: &TrajFile) -> ChoreoResult<Vec<f64>> {
             if num_pose_wpts_in_zero_ang_vel_sgmt > 1 {
                 return Err(ChoreoError::HeadingConflict(
                     idx_mult_pose + 1,
-                    "Multiple Pose waypoints within 0 maxAngVel Contraints".to_string(),
+                    "Multiple Pose waypoints within 0 maxAngVel Constraints".to_string(),
                 ));
             }
         } else {
@@ -221,7 +221,7 @@ pub fn calculate_adjusted_headings(traj: &TrajFile) -> ChoreoResult<Vec<f64>> {
     }
 
     // interpolate non fixed headings between fixed ones.
-    let mut last_fixed_heading = (0, waypoints[0].heading.1);
+    let mut last_fixed_heading = (0, waypoints[0].heading.val);
     for (idx, &maybe_fixed_heading) in headings_from_constraints.iter().enumerate() {
         if let Some(target_heading) = maybe_fixed_heading {
             // set heading for fixed heading wpt
@@ -248,7 +248,7 @@ pub fn calculate_adjusted_headings(traj: &TrajFile) -> ChoreoResult<Vec<f64>> {
         .iter()
         .enumerate()
         .filter(|(_, w)| w.fix_heading)
-        .find(|(i, w)| w.heading.1 != new_headings[*i])
+        .find(|(i, w)| w.heading.val != new_headings[*i])
     {
         return Err(ChoreoError::HeadingConflict(
             i + 1,
@@ -272,19 +272,22 @@ pub fn fix_scope(idx: usize, removed_idxs: &[usize]) -> usize {
 }
 
 // This is duplicated in constraints::ConstraintSetter
-pub fn fix_constraint_indices(traj: &TrajFile) -> (Vec<usize>, Vec<ConstraintIDX<f64>>) {
+pub fn fix_constraint_indices(
+    trajectory: &TrajectoryFile,
+) -> (Vec<usize>, Vec<ConstraintIDX<f64>>) {
     let mut guess_points: Vec<usize> = Vec::new();
     let mut constraint_idx = Vec::<ConstraintIDX<f64>>::new();
-    let num_wpts = traj.params.waypoints.len();
+    let num_wpts = trajectory.params.waypoints.len();
 
-    traj.params
+    trajectory
+        .params
         .waypoints
         .iter()
         .enumerate()
         .filter(|(_, w)| w.is_initial_guess && !w.fix_heading && !w.fix_translation)
         .for_each(|(idx, _)| guess_points.push(idx));
 
-    for constraint in &traj.params.constraints {
+    for constraint in &trajectory.params.get_enabled_constraints() {
         let from = constraint.from.get_idx(num_wpts);
         let to = constraint.to.as_ref().and_then(|id| id.get_idx(num_wpts));
         // from and to are None if they did not point to a valid waypoint.
@@ -317,6 +320,7 @@ pub fn fix_constraint_indices(traj: &TrajFile) -> (Vec<usize>, Vec<ConstraintIDX
                         from: fixed_from,
                         to: fixed_to,
                         data: constraint.data.snapshot(),
+                        enabled: constraint.enabled,
                     });
                 }
             }

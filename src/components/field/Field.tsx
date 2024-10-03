@@ -12,12 +12,10 @@ import { CircularProgress, Tooltip } from "@mui/material";
 import Box from "@mui/material/Box/Box";
 import IconButton from "@mui/material/IconButton";
 import "react-toastify/dist/ReactToastify.min.css";
-import { ICircularObstacleStore } from "../../document/CircularObstacleStore";
 import { IConstraintStore } from "../../document/ConstraintStore";
 import { IEventMarkerStore } from "../../document/EventMarkerStore";
 import { IHolonomicWaypointStore } from "../../document/HolonomicWaypointStore";
 import { Commands } from "../../document/tauriCommands";
-import CircularObstacleConfigPanel from "../config/CircularObstacleConfigPanel";
 import ConstraintsConfigPanel from "../config/ConstraintsConfigPanel";
 import ViewOptionsPanel from "../config/ViewOptionsPanel";
 import WaypointVisibilityPanel from "../config/WaypointVisibilityPanel";
@@ -34,6 +32,12 @@ export class Field extends Component<Props, State> {
     const selectedSidebar = doc.selectedSidebarItem;
     const activePath = doc.pathlist.activePath;
     const activePathUUID = doc.pathlist.activePathUUID;
+    if (
+      activePathUUID === doc.pathlist.defaultPath!.uuid ||
+      activePath === undefined
+    ) {
+      return <></>;
+    }
     let indexIfWaypoint = -1;
     if (selectedSidebar !== undefined && "heading" in selectedSidebar) {
       indexIfWaypoint = activePath.params.waypoints.findIndex(
@@ -64,18 +68,8 @@ export class Field extends Component<Props, State> {
             ></ConstraintsConfigPanel>
           )}
         {selectedSidebar !== undefined &&
-          "radius" in selectedSidebar &&
-          activePath.params.obstacles.find(
-            (obstacle) =>
-              obstacle.uuid == (selectedSidebar as ICircularObstacleStore)!.uuid
-          ) && (
-            <CircularObstacleConfigPanel
-              obstacle={selectedSidebar as ICircularObstacleStore}
-            ></CircularObstacleConfigPanel>
-          )}
-        {selectedSidebar !== undefined &&
           "offset" in selectedSidebar &&
-          activePath.traj.markers.find(
+          activePath.trajectory.markers.find(
             (marker) =>
               marker.uuid == (selectedSidebar as IEventMarkerStore)!.uuid
           ) && (

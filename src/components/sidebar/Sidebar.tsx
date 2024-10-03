@@ -9,8 +9,6 @@ import MenuIcon from "@mui/icons-material/Menu";
 import { ContentCopy, Redo, Undo } from "@mui/icons-material";
 import Add from "@mui/icons-material/Add";
 import SidebarConstraint from "./SidebarConstraint";
-import SidebarObstacle from "./SidebarObstacle";
-import { ICircularObstacleStore } from "../../document/CircularObstacleStore";
 import SidebarEventMarker from "./SidebarEventMarker";
 import { IEventMarkerStore } from "../../document/EventMarkerStore";
 
@@ -152,45 +150,11 @@ class Sidebar extends Component<Props, State> {
               </span>
             </div>
           )}
-          {(doc.usesObstacles || doc.isSidebarCircularObstacleSelected) && (
-            <>
-              <Divider
-                className={styles.SidebarDivider}
-                textAlign="left"
-                flexItem
-              >
-                <span>OBSTACLES</span>
-              </Divider>
-              <div className={styles.WaypointList}>
-                {doc.pathlist.activePath.params.obstacles.map(
-                  (obstacle: ICircularObstacleStore, index: number) => {
-                    return (
-                      <SidebarObstacle
-                        key={obstacle.uuid}
-                        obstacle={obstacle}
-                        index={index}
-                      ></SidebarObstacle>
-                    );
-                  }
-                )}
-              </div>
-              {doc.pathlist.activePath.params.obstacles.length == 0 && (
-                <div
-                  className={styles.SidebarItem + " " + styles.Noninteractible}
-                >
-                  <span></span>
-                  <span style={{ color: "gray", fontStyle: "italic" }}>
-                    No Obstacles
-                  </span>
-                </div>
-              )}
-            </>
-          )}
           <Divider className={styles.SidebarDivider} textAlign="left" flexItem>
             <span>MARKERS</span>
           </Divider>
           <div className={styles.WaypointList}>
-            {doc.pathlist.activePath.traj.markers.map(
+            {doc.pathlist.activePath.trajectory.markers.map(
               (marker: IEventMarkerStore, index: number) => {
                 return (
                   <SidebarEventMarker
@@ -202,7 +166,7 @@ class Sidebar extends Component<Props, State> {
               }
             )}
           </div>
-          {doc.pathlist.activePath.traj.markers.length == 0 && (
+          {doc.pathlist.activePath.trajectory.markers.length == 0 && (
             <div className={styles.SidebarItem + " " + styles.Noninteractible}>
               <span></span>
               <span style={{ color: "gray", fontStyle: "italic" }}>

@@ -10,12 +10,8 @@ import {
   SAVE_FILE_VERSION,
   SampleType,
   SwerveSample,
-  Traj
+  Trajectory
 } from "./2025/DocumentTypes";
-import {
-  CircularObstacleStore,
-  ICircularObstacleStore
-} from "./CircularObstacleStore";
 import { ConstraintStore, IConstraintStore } from "./ConstraintStore";
 import { EventMarkerStore, IEventMarkerStore } from "./EventMarkerStore";
 import { Variables } from "./ExpressionStore";
@@ -31,7 +27,6 @@ import { tracing } from "./tauriTracing";
 export type SelectableItemTypes =
   | IHolonomicWaypointStore
   | IConstraintStore
-  | ICircularObstacleStore
   | IEventMarkerStore
   | undefined;
 export const SelectableItem = types.union(
@@ -42,14 +37,10 @@ export const SelectableItem = types.union(
       if (snapshot.from) {
         return ConstraintStore;
       }
-      if (snapshot.radius) {
-        return CircularObstacleStore;
-      }
       return HolonomicWaypointStore;
     }
   },
   HolonomicWaypointStore,
-  CircularObstacleStore,
   EventMarkerStore,
   ConstraintStore
 );
@@ -64,8 +55,6 @@ export const DocumentStore = types
     pathlist: PathListStore,
     robotConfig: RobotConfigStore,
     variables: Variables,
-    splitTrajectoriesAtStopPoints: types.boolean,
-    usesObstacles: types.boolean,
     selectedSidebarItem: types.maybe(types.safeReference(SelectableItem)),
     hoveredSidebarItem: types.maybe(types.safeReference(SelectableItem))
   })
@@ -85,17 +74,10 @@ export const DocumentStore = types
         Object.hasOwn(self.selectedSidebarItem, "from")
       );
     },
-    get isSidebarCircularObstacleSelected() {
-      return (
-        self.selectedSidebarItem !== undefined &&
-        Object.hasOwn(self.selectedSidebarItem, "radius")
-      );
-    },
     get isSidebarWaypointSelected() {
       return (
         self.selectedSidebarItem !== undefined &&
-        !this.isSidebarConstraintSelected &&
-        !this.isSidebarCircularObstacleSelected
+        !this.isSidebarConstraintSelected
       );
     },
     get isSidebarConstraintHovered() {
@@ -104,17 +86,10 @@ export const DocumentStore = types
         Object.hasOwn(self.hoveredSidebarItem, "from")
       );
     },
-    get isSidebarCircularObstacleHovered() {
-      return (
-        self.hoveredSidebarItem !== undefined &&
-        Object.hasOwn(self.hoveredSidebarItem, "radius")
-      );
-    },
     get isSidebarWaypointHovered() {
       return (
         self.hoveredSidebarItem !== undefined &&
-        !this.isSidebarConstraintHovered &&
-        !this.isSidebarCircularObstacleHovered
+        !this.isSidebarConstraintHovered
       );
     },
     get hoveredWaypointIndex() {
@@ -178,16 +153,18 @@ export const DocumentStore = types
       }
       console.log(pathStore.serialize);
       const config = self.robotConfig.serialize;
-      pathStore.params.constraints.forEach((constraint) => {
-        if (constraint.issues.length > 0) {
-          throw constraint.issues.join(", ");
-        }
-      });
+      pathStore.params.constraints
+        .filter((constraint) => constraint.enabled)
+        .forEach((constraint) => {
+          if (constraint.issues.length > 0) {
+            throw constraint.issues.join(", ");
+          }
+        });
       pathStore.ui.setGenerating(true);
       const handle = pathStore.uuid
         .split("")
         .reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0);
-      let unlisten: UnlistenFn;
+      let unlisten: UnlistenFn = () => {};
       pathStore.ui.setIterationNumber(0);
       await Commands.guessIntervals(config, pathStore.serialize)
         .catch((e) => {
@@ -220,8 +197,8 @@ export const DocumentStore = types
             const event: Event<ProgressUpdate> =
               rawEvent as Event<ProgressUpdate>;
             if (
-              event.payload!.type === "swerveTraj" ||
-              event.payload!.type === "diffTraj"
+              event.payload!.type === "swerveTrajectory" ||
+              event.payload!.type === "differentialTrajectory"
             ) {
               const samples = event.payload.update as
                 | SwerveSample[]
@@ -245,18 +222,17 @@ export const DocumentStore = types
           unlisten();
         })
         .then(
-          (rust_traj) => {
-            const result: Traj = rust_traj as Traj;
+          (rust_trajectory) => {
+            const result: Trajectory = rust_trajectory as Trajectory;
             console.log(result);
-            if (result.traj.samples.length == 0) throw "No traj";
+            if (result.trajectory.samples.length == 0) throw "No trajectory";
             self.history.startGroup(() => {
-              const newTraj = result.traj.samples;
-              pathStore.traj.setSamples(newTraj);
-              pathStore.traj.setWaypoints(result.traj.waypoints);
+              const newTrajectory = result.trajectory.samples;
+              pathStore.trajectory.setSamples(newTrajectory);
+              pathStore.trajectory.setSplits(result.trajectory.splits);
+              pathStore.trajectory.setWaypoints(result.trajectory.waypoints);
 
               pathStore.setSnapshot(result.snapshot);
-              // set this within the group so it gets picked up in the autosave
-              pathStore.setIsTrajectoryStale(false);
               self.history.stopGroup();
             });
           },
@@ -268,7 +244,6 @@ export const DocumentStore = types
         .finally(() => {
           // none of the below should trigger autosave
           pathStore.ui.setGenerating(false);
-          pathStore.setIsTrajectoryStale(false);
         });
     }
   }))
@@ -343,16 +318,6 @@ export const DocumentStore = types
         window.dispatchEvent(
           new CustomEvent("center", { detail: { x, y, k } })
         );
-      }
-    };
-  })
-  .actions((self) => {
-    return {
-      setSplitTrajectoriesAtStopPoints(split: boolean) {
-        self.splitTrajectoriesAtStopPoints = split;
-      },
-      setUsesObstacles(usesObstacles: boolean) {
-        self.usesObstacles = usesObstacles;
       }
     };
   });

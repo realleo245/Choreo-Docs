@@ -33,7 +33,8 @@ import Waypoint from "../assets/Waypoint";
 import {
   PoseVariable as DocPoseVariable,
   Variables as DocVariables,
-  Expr
+  Expr,
+  isExpr
 } from "./2025/DocumentTypes";
 import { Env } from "./DocumentManager";
 import { tracing } from "./tauriTracing";
@@ -41,16 +42,16 @@ import { tracing } from "./tauriTracing";
 export const math = create(all, { predictable: true });
 
 function isSymbolNode(node: MathNode): node is SymbolNode {
-  return Object.hasOwn(node, "isSymbolNode");
+  return node.type === "SymbolNode";
 }
 function isFunctionNode(node: MathNode): node is FunctionNode {
-  return Object.hasOwn(node, "isFunctionNode");
+  return node.type === "FunctionNode";
 }
 function isAccessorNode(node: MathNode): node is AccessorNode {
-  return Object.hasOwn(node, "isAccessorNode");
+  return node.type === "AccessorNode";
 }
 function isConstantNode(node: MathNode): node is ConstantNode {
-  return Object.hasOwn(node, "isConstantNode");
+  return node.type === "ConstantNode";
 }
 
 function addUnitToExpression(
@@ -187,7 +188,6 @@ export const DimensionsExt = {
       </Tooltip>
     )
   }
-  // TODO add obstacle here
 } as const satisfies {
   [key in DimensionNameExt]: Dimension<key>;
 };
@@ -231,8 +231,8 @@ export const ExpressionStore = types
       });
     },
     deserialize(serial: Expr) {
-      self.expr = math.parse(serial[0]);
-      self.value = serial[1];
+      self.expr = math.parse(serial.exp);
+      self.value = serial.val;
       return self;
     },
     // WARNING: should not be generally used. This is for cases
@@ -282,7 +282,7 @@ export const ExpressionStore = types
         if (
           isSymbolNode(innerNode) &&
           typeof scope.get(innerNode.name) === "function" &&
-          (!isFunctionNode(parent) || path !== "fn")
+          (parent === null || !isFunctionNode(parent) || path !== "fn")
         ) {
           return new math.FunctionNode(innerNode, []);
         }
@@ -307,15 +307,15 @@ export const ExpressionStore = types
         }
         return innerNode;
       });
-      let result = transformed.evaluate(scope) ?? undefined;
-      if (result?.["isNode"]) {
-        result = this.evaluator(result);
-      }
+      const result = transformed.evaluate(scope) ?? undefined;
 
       return result;
     },
     get serialize(): Expr {
-      return [self.expr.toString(), self.value];
+      return {
+        exp: self.expr.toString(),
+        val: self.value
+      };
     }
   }))
   .views((self) => ({
@@ -380,7 +380,7 @@ export const ExpressionStore = types
       try {
         newNumber = self.evaluator(newNode);
       } catch (e) {
-        tracing.error("failed to evaluate", e);
+        tracing.error("failed to evaluate", e, newNode);
         return undefined;
       }
       if (newNumber === undefined || newNumber === null) {
@@ -401,9 +401,16 @@ export const ExpressionStore = types
         return this.validate(newNumber);
       }
       if (!isUnit(newNumber)) {
+        tracing.error("not unit:", newNumber);
         return undefined;
       }
       // newNumber is Unit
+      // unit that's just a number
+      if (newNumber.dimensions.every((d) => d == 0)) {
+        if (self.defaultUnit !== undefined) {
+          return addUnitToExpression(newNode, self.defaultUnit.toString());
+        }
+      }
       const unit = self.defaultUnit;
       if (unit === undefined) {
         tracing.error(
@@ -455,7 +462,11 @@ export const ExpressionStore = types
             if (value !== undefined) {
               self.setValue(value);
             }
-          }
+          },
+          // do this calculation when setting up the reaction
+          // so value is populated (default is false but this causes issues
+          // when restoring ExpressionStores out of undo history)
+          { fireImmediately: true }
         );
       },
       beforeDestroy: () => {
@@ -555,10 +566,10 @@ export const Variables = types
             dimension
           });
         }
-      } else if (Array.isArray(expr)) {
+      } else if (isExpr(expr)) {
         // deserialize Expr
         store = ExpressionStore.create({
-          expr: math.parse(expr[0]),
+          expr: math.parse(expr.exp),
           dimension
         });
         store.deserialize(expr);
@@ -591,8 +602,6 @@ export const Variables = types
     },
     // criteria according to https://mathjs.org/docs/expressions/syntax.html#constants-and-variables
     validateName(name: string, selfName: string): boolean {
-      console.log(name.split(""));
-
       const notAlreadyExists =
         name === selfName ||
         (!self.poses.has(name) && !self.expressions.has(name));

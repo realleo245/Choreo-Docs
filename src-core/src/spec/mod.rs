@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
 pub mod project;
-pub mod traj;
+pub mod trajectory;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct OpenFilePayload {
@@ -26,16 +26,22 @@ impl SnapshottableType for f64 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Expr(pub String, pub f64);
+pub struct Expr {
+    pub exp: String,
+    pub val: f64,
+}
 impl Expr {
     #[must_use]
     pub fn new(name: &str, value: f64) -> Self {
-        Self(name.to_string(), value)
+        Self {
+            exp: name.to_string(),
+            val: value,
+        }
     }
 }
 impl SnapshottableType for Expr {
     #[inline]
     fn snapshot(&self) -> f64 {
-        self.1
+        self.val
     }
 }

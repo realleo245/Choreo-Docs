@@ -2,8 +2,17 @@ import { ConstraintData } from "../ConstraintDefinitions";
 import { Dimensions } from "../ExpressionStore";
 
 export const SAVE_FILE_VERSION = "v2025.0.0";
-export type Expr = [string, number];
+export type Expr = { exp: string; val: number };
 
+export function isExpr(arg: any): arg is Expr {
+  return (
+    typeof arg === "object" &&
+    Object.hasOwn(arg, "exp") &&
+    typeof arg["exp"] === "string" &&
+    Object.hasOwn(arg, "val") &&
+    typeof arg["val"] === "number"
+  );
+}
 export type ExprOrNumber = Expr | number;
 export interface Variable {
   dimension: keyof typeof Dimensions;
@@ -22,9 +31,8 @@ export interface Variables {
 
 export interface Bumper<T extends ExprOrNumber> {
   front: T;
-  left: T;
   back: T;
-  right: T;
+  side: T;
 }
 
 export interface Module<T extends ExprOrNumber> {
@@ -33,7 +41,8 @@ export interface Module<T extends ExprOrNumber> {
 }
 
 export interface RobotConfig<T extends ExprOrNumber> {
-  modules: [Module<T>, Module<T>, Module<T>, Module<T>];
+  frontLeft: Module<T>;
+  backLeft: Module<T>;
   mass: T;
   inertia: T;
   gearing: T;
@@ -43,6 +52,7 @@ export interface RobotConfig<T extends ExprOrNumber> {
   /// motor N*m
   tmax: T; // N*m
   bumper: Bumper<T>;
+  differentialTrackWidth: T;
 }
 
 export interface Project {
@@ -70,6 +80,7 @@ export interface Constraint {
   from: WaypointID;
   to?: WaypointID;
   data: ConstraintData;
+  enabled: boolean;
 }
 
 export interface SwerveSample {
@@ -101,36 +112,31 @@ export interface DifferentialSample {
 }
 
 export interface ProgressUpdate {
-  type: "swerveTraj" | "diffTraj";
+  type: "swerveTrajectory" | "differentialTrajectory";
   update: SwerveSample[] | DifferentialSample[] | string;
 }
 
 export interface ChoreoPath<T extends ExprOrNumber> {
   waypoints: Waypoint<T>[];
   constraints: Constraint[];
+  targetDt: T;
 }
 
 export type SampleType = "Swerve" | "Differential";
 export interface Output {
   waypoints: number[];
-  samples: SwerveSample[][] | DifferentialSample[][];
-  forcesAvailable: boolean;
+  samples: SwerveSample[] | DifferentialSample[];
+  splits: number[];
 }
 
-export interface Traj {
+export interface Trajectory {
   name: string;
   version: typeof SAVE_FILE_VERSION;
   params: ChoreoPath<Expr>;
   snapshot: ChoreoPath<number>;
-  traj: Output;
+  trajectory: Output;
   events: EventMarker[];
   pplibCommands: PplibCommandMarker<number>[];
-}
-
-export interface CircleObstacle<T extends ExprOrNumber> {
-  x: T;
-  y: T;
-  r: T;
 }
 
 export type GroupCommand<T extends ExprOrNumber> = {
@@ -158,7 +164,7 @@ export type PplibCommand<T extends ExprOrNumber> =
 export interface PplibCommandMarker<T extends ExprOrNumber> {
   name: string;
   target: WaypointID;
-  trajTargetIndex: number | undefined;
+  trajectoryTargetIndex: number | undefined;
   offset: T;
   /**
    * The timestamp along the trajectory of the waypoint this marker targeted on the last generation.

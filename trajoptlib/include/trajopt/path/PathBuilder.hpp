@@ -124,144 +124,20 @@ class TRAJOPT_DLLEXPORT PathBuilder {
   }
 
   /**
-   * Apply an obstacle constraint to a waypoint.
+   * Add a rectangular bumper to a list used when applying
+   * obstacle constraints.
    *
-   * @param index index of the waypoint
-   * @param obstacle the obstacle
+   * @param front Distance in meters from center to front bumper edge
+   * @param left Distance in meters from center to left bumper edge
+   * @param right Distance in meters from center to right bumper edge
+   * @param back Distance in meters from center to back bumper edge
    */
-  void WptObstacle(size_t index, const Obstacle& obstacle) {
-    for (auto& _bumpers : bumpers) {
-      auto minDistance = _bumpers.safetyDistance + obstacle.safetyDistance;
-
-      size_t bumperCornerCount = _bumpers.points.size();
-      size_t obstacleCornerCount = obstacle.points.size();
-      if (bumperCornerCount == 1 && obstacleCornerCount == 1) {
-        // if the bumpers and obstacle are only one point
-        WptConstraint(
-            index, PointPointMinConstraint{_bumpers.points.at(0),
-                                           obstacle.points.at(0), minDistance});
-        return;
-      }
-
-      // robot bumper edge to obstacle point constraints
-      for (auto& obstaclePoint : obstacle.points) {
-        // First apply constraint for all but last edge
-        for (size_t bumperCornerIndex = 0;
-             bumperCornerIndex < bumperCornerCount - 1; ++bumperCornerIndex) {
-          WptConstraint(index, LinePointConstraint{
-                                   _bumpers.points.at(bumperCornerIndex),
-                                   _bumpers.points.at(bumperCornerIndex + 1),
-                                   obstaclePoint, minDistance});
-        }
-        // apply to last edge: the edge connecting the last point to the first
-        // must have at least three points to need this
-        if (bumperCornerCount >= 3) {
-          WptConstraint(index,
-                        LinePointConstraint{
-                            _bumpers.points.at(bumperCornerCount - 1),
-                            _bumpers.points.at(0), obstaclePoint, minDistance});
-        }
-      }
-
-      // obstacle edge to bumper corner constraints
-      for (auto& bumperCorner : _bumpers.points) {
-        if (obstacleCornerCount > 1) {
-          for (size_t obstacleCornerIndex = 0;
-               obstacleCornerIndex < obstacleCornerCount - 1;
-               ++obstacleCornerIndex) {
-            WptConstraint(
-                index,
-                PointLineConstraint{
-                    bumperCorner, obstacle.points.at(obstacleCornerIndex),
-                    obstacle.points.at(obstacleCornerIndex + 1), minDistance});
-          }
-          if (obstacleCornerCount >= 3) {
-            WptConstraint(index, PointLineConstraint{
-                                     bumperCorner,
-                                     obstacle.points.at(bumperCornerCount - 1),
-                                     obstacle.points.at(0), minDistance});
-          }
-        } else {
-          WptConstraint(index,
-                        PointPointMinConstraint{
-                            bumperCorner, obstacle.points.at(0), minDistance});
-        }
-      }
-    }
-  }
-
-  /**
-   * Apply an obstacle constraint to the continuum of state between two
-   * waypoints.
-   *
-   * @param fromIndex index of the waypoint at the beginning of the continuum
-   * @param toIndex index of the waypoint at the end of the continuum
-   * @param obstacle the obstacle
-   */
-  void SgmtObstacle(size_t fromIndex, size_t toIndex,
-                    const Obstacle& obstacle) {
-    for (auto& _bumpers : bumpers) {
-      auto minDistance = _bumpers.safetyDistance + obstacle.safetyDistance;
-
-      size_t bumperCornerCount = _bumpers.points.size();
-      size_t obstacleCornerCount = obstacle.points.size();
-      if (bumperCornerCount == 1 && obstacleCornerCount == 1) {
-        // if the bumpers and obstacle are only one point
-        SgmtConstraint(
-            fromIndex, toIndex,
-            PointPointMinConstraint{_bumpers.points.at(0),
-                                    obstacle.points.at(0), minDistance});
-        return;
-      }
-
-      // robot bumper edge to obstacle point constraints
-      for (auto& obstaclePoint : obstacle.points) {
-        // First apply constraint for all but last edge
-        for (size_t bumperCornerIndex = 0;
-             bumperCornerIndex < bumperCornerCount - 1; ++bumperCornerIndex) {
-          SgmtConstraint(
-              fromIndex, toIndex,
-              LinePointConstraint{_bumpers.points.at(bumperCornerIndex),
-                                  _bumpers.points.at(bumperCornerIndex + 1),
-                                  obstaclePoint, minDistance});
-        }
-        // apply to last edge: the edge connecting the last point to the first
-        // must have at least three points to need this
-        if (bumperCornerCount >= 3) {
-          SgmtConstraint(
-              fromIndex, toIndex,
-              LinePointConstraint{_bumpers.points.at(bumperCornerCount - 1),
-                                  _bumpers.points.at(0), obstaclePoint,
-                                  minDistance});
-        }
-      }
-
-      // obstacle edge to bumper corner constraints
-      for (auto& bumperCorner : _bumpers.points) {
-        if (obstacleCornerCount > 1) {
-          for (size_t obstacleCornerIndex = 0;
-               obstacleCornerIndex < obstacleCornerCount - 1;
-               ++obstacleCornerIndex) {
-            SgmtConstraint(
-                fromIndex, toIndex,
-                PointLineConstraint{
-                    bumperCorner, obstacle.points.at(obstacleCornerIndex),
-                    obstacle.points.at(obstacleCornerIndex + 1), minDistance});
-          }
-          if (obstacleCornerCount >= 3) {
-            SgmtConstraint(
-                fromIndex, toIndex,
-                PointLineConstraint{bumperCorner,
-                                    obstacle.points.at(bumperCornerCount - 1),
-                                    obstacle.points.at(0), minDistance});
-          }
-        } else {
-          SgmtConstraint(fromIndex, toIndex,
-                         PointPointMinConstraint{
-                             bumperCorner, obstacle.points.at(0), minDistance});
-        }
-      }
-    }
+  void SetBumpers(double front, double left, double right, double back) {
+    bumpers.emplace_back(trajopt::Bumpers{.safetyDistance = 0.01,
+                                          .points = {{+front, +left},
+                                                     {-back, +left},
+                                                     {-back, -right},
+                                                     {+front, -right}}});
   }
 
   /**
